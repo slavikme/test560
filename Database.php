@@ -26,15 +26,15 @@ class Database
      * @param string $host Database's host name or IP address
      * @param string $port Database's port number
      * @param string $dbname The database name
-     * @param string $user Username to connect to database
+     * @param string $username Username to connect to database
      * @param string $password The Password associated with the username
      * @return PDO
      * @throws Exception
      */
-    private function connect($host, $port, $dbname, $user, $password)
+    private function connect($host, $port, $dbname, $username, $password)
     {
         try {
-            self::$connection = new PDO("mysql;host=$host;port=$port;dbname=$dbname", $user, $password);
+            self::$connection = new PDO("mysql:dbname=$dbname;host=$host;port=$port", $username, $password);
             self::$connection->setAttribute(PDO::ATTR_ERRMODE, PDO::ERRMODE_EXCEPTION);
             return self::$connection;
         } catch ( PDOException $e ) {
@@ -57,7 +57,7 @@ class Database
      */
     private function createTables()
     {
-        $query = file_get_contents("tables.sql");
+        $query = file_get_contents(__DIR__ . "/tables.sql");
         self::$connection->exec($query);
         return true;
     }
@@ -98,9 +98,9 @@ class Database
 
         // Check if this category already exists
         $query = "SELECT * FROM categories WHERE `name`=?";
-        $result = self::$connection->query($query);
-        if ( count($result) ) {
-            return $result[0]["id"];
+        $stt = self::$connection->prepare($query);
+        if ( $stt->execute(array($name)) && ($result = $stt->fetch(PDO::FETCH_ASSOC)) ) {
+            return $result["id"];
         }
 
         // If not, create one
@@ -122,7 +122,7 @@ class Database
     public function addTransaction($category_name, $price, $datetime)
     {
         if ( ($cid = $this->addCategory($category_name)) === false
-            || !is_numeric($price)
+            || !is_numeric($price) || $price < 0
             || ($datetime = strtotime($datetime)) === false ) {
             return false;
         }
@@ -130,7 +130,7 @@ class Database
         $query = "INSERT INTO transactions SET `category_id`=?, `price`=?, `timestamp`=?";
         self::$connection
             ->prepare($query)
-            ->execute(array($cid, $price, $datetime));
+            ->execute(array($cid, $price, date("Y-m-d H:i:s",$datetime)));
 
         return self::$connection->lastInsertId();
     }
